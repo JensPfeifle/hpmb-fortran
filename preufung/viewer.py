@@ -101,11 +101,12 @@ if __name__ == "__main__":
     framedata = [extract_frame_data(f) for f in animationframes[1:]]
 
     fnum = [f[0] for f in framedata]
+    ftime = [f[1] for f in framedata]
     ekin = [f[2] for f in framedata]
 
     # ax2.set_xlim(left=0)
     # ax2.set_ylim(bottom=0)
-    ax2.plot(fnum, ekin, label='ekin')
+    ax2.plot(ftime, ekin, label='ekin')
     ax2.legend()
 
     ax.set_xlim(0, 111.76)
