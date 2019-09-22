@@ -3,50 +3,70 @@ from matplotlib import pyplot as plt
 from matplotlib import animation
 from collections import namedtuple
 import itertools
+import json
 
-Balldata = namedtuple('Balldata', ['xpos', 'ypos', 'xvel','yvel'])
-ballpatches = [] # holds cirlce patches for animation
+Balldata = namedtuple('Balldata', ['xpos', 'ypos', 'xvel', 'yvel'])
+Frame = namedtuple('Frame', ['framenum', 'time', 'kinetic', 'balldata'])
+ballpatches = []  # holds circle patches for animation
+
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
+
 def split_into_frames(filelines: list):
     """
     splits a list of lines into a list of frames
-    note: assumes frames are all same # of lines
+    assumes frames are all same # of lines
     frames begin with 'FRAME #'
     frames end with 'ENDF'
     """
     start = -1
     framesize = 0
-    for i in range(0,len(filelines)):
+    for i in range(0, len(filelines)):
         line = filelines[i]
         if 'FRAME' in line:
             start = i
         if 'ENDF' in line:
             framesize = i + 1 - start
-            break         
+            break
     return chunks(filelines, framesize)
-        
+
+
 def extract_frame_data(framelines: list):
+    """
+    takes raw frame data in the form of lines from the output file
+    and retuns a a frame object
+    """
     # first line is header
     f = framelines[0].split()
     framenum = int(f[1])
     # second line are global observables
     f = framelines[1].split()
-    t =       float(f[0])
+    t = float(f[0])
     kinetic = float(f[1])
     # remaining lines except last are balls
-    ballvalues = {}
-    for i in range(2,len(framelines)-1):
+    balldatas = {}
+    for i in range(2, len(framelines)-1):
         f = framelines[i].split()
         ballnum = int(f[0])
-        xpos,ypos,xvel,yvel = [float(s) for s in f[1:]]
-        ballvalues[ballnum] = Balldata(xpos, ypos, xvel, yvel)
+        xpos, ypos, xvel, yvel = [float(s) for s in f[1:]]
+        balldatas[ballnum] = Balldata(xpos, ypos, xvel, yvel)
     # make observables a namedtuple?
-    return (framenum, t, kinetic, ballvalues)
+    return Frame(framenum, t, kinetic, balldatas)
+
+
+def anim_frames(framesr, frame_dt, anim_frame_interval):
+    """
+    takes an interable of frames and delta t betwen them
+    and returns a reduced # appropriate for animation
+    """
+    # interval: time between animation frames [ms]
+    step = int(anim_frame_interval/1000/frame_dt)
+    return itertools.islice(frames, 0, None, step)
+
 
 def init():
     """
@@ -57,64 +77,82 @@ def init():
         ax.add_patch(patch)
     return ballpatches
 
-def animate(framedata):
+
+def animate(framedata: Frame):
     """
     animation update function
     """
-    framenum, t, kinetic, balldata = framedata
-    for i in range(len(balldata)):
+    balls = framedata.balldata
+    for i, _ in enumerate(balls):
         patch = ballpatches[i]
-        x = balldata[i+1].xpos
-        y = balldata[i+1].ypos
+        # x and y swapped, for horizontal plot
+        y = balls[i+1].xpos
+        x = balls[i+1].ypos
         patch.center = (x, y)
-    return ballpatches # only return updated?
+    return ballpatches
 
-def anim_frames(frame_iterator, interval):
-    # interval between animation frames [ms]
-    frame_deltat = 0.00001 # [s]
-    step = int(interval/1000/frame_deltat)
-    return itertools.islice(frame_iterator,0,None,step)
 
 if __name__ == "__main__":
-    
-    # read data
-    with open('/home/jens/git/hpmb-fortran/preufung/pool.out','r') as f:
+
+    ms_between_frames = 20
+    inputfile = './input.dat'
+    outputfile = './pool.out'
+
+    # read variables from input data
+    numballs = 0
+    width_mm = 0
+    height_mm = 0
+    dt = 1
+    with open(inputfile, 'r') as f:
+        lines = f.read().strip().split('\n')
+        lines = lines[1:-1]  # drop first and last
+        for l in lines:
+            # unsafe...
+            exec(l.strip())
+
+    # read results from output data
+    with open(outputfile, 'r') as f:
         lines = f.read().strip().split('\n')
     # process data
     frames = split_into_frames(lines)
-
-    # setup canvas
-    fig, (ax,ax2) = plt.subplots(2,1)
-    #fig, ax = plt.subplots()
-
-
-
-    animationframes = list(anim_frames(frames, 16))
-
+    animationframes = list(anim_frames(frames, dt, ms_between_frames))
+    # only extract data from frames that will actually be animated
     framedata = [extract_frame_data(f) for f in animationframes]
 
+    fnum = [f.framenum for f in framedata]
+    ftime = [f.time for f in framedata]
+    ekin = [f.kinetic for f in framedata]
 
-    fnum = [f[0] for f in framedata]
-    ekin = [f[2] for f in framedata]
+    # setup canvas
+    fig, (ax, ax2) = plt.subplots(2, 1)
 
-    #ax2.set_xlim(left=0)
-    #ax2.set_ylim(bottom=0)
-    ax2.plot(fnum,ekin,label='ekin')
-    ax2.legend()
+    # energy plot
+    ax2.plot(ftime, ekin, label='ekin')
+    ax2.set_ylabel("total kinetic energy [J]")
+    ax2.set_xlabel("simulation time [s]")
+    # ax2.legend()
 
-    ax.set_xlim(0,111.76)
-    ax.set_ylim(0,223.52)
-    ax.set_yticklabels([])
-    ax.set_xticklabels([])
+    # animation
+    ax.set_ylim(0, width_mm)
+    ax.set_xlim(0, height_mm)
+    ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False,
+                   labelbottom=False, labeltop=False, labelleft=False, labelright=False)
     ax.set_aspect('equal')
-    # ballpatches is global variable
-    for i in range(16): # hardcoded max number of balls!
-        ballpatches.append(plt.Circle((-10,0),5.7/2))
-    anim = animation.FuncAnimation(fig, animate, 
-                                init_func=init, 
-                                frames=framedata, 
-                                interval=16,
-                                repeat=True,
-                                blit=True)
+    ax.set_facecolor('darkgreen')
+
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+    colorcycle = itertools.cycle(colors)
+    for i in range(numballs):
+        if i == 0:
+            ballpatches.append(plt.Circle((-10, 0), 5.6/2, color='ivory'))
+        else:
+            ballpatches.append(plt.Circle((-10, 0), 5.6/2, color=next(colorcycle)))
+    anim = animation.FuncAnimation(fig, animate,
+                                   init_func=init,
+                                   frames=framedata,
+                                   interval=ms_between_frames,
+                                   repeat=True,
+                                   blit=True)
 
     plt.show()

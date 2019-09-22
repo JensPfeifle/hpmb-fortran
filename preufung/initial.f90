@@ -1,32 +1,66 @@
 module initial
     use globals
+    use forces
     implicit none
+
+    private :: calc_numrows
+    public :: initial_setup
 
 contains
 
-subroutine setupinitial(x,y,vx,vy)
-    real, dimension(numballs),intent(out)  :: x,y
-    real, dimension(numballs),intent(out)  :: vx,vy
+function calc_numrows(nballs) result(nrows)
+    ! aus anzahl kugeln die anzahl reihen bestimmen
+    integer, intent(in) :: nballs
+    integer             :: nrows
+    integer             :: sum = 0
 
-    integer :: i
-    integer :: j,k
-    real    :: xi,yi
-    real,parameter    :: sx = 5.7 ! spacing in xi
-    real,parameter    :: sy = 4.9363448 ! spacing in yi ,sy
+    nrows = 1
+    do while (sum < nballs)
+        sum = sum + nrows ! nballs in row = row number
+        nrows = nrows + 1
+    end do
+end function calc_numrows
+
+subroutine initial_setup(nballs, qvel, offcenter, width, height, x,y,vx,vy)
+    implicit none
+    integer, intent(in)                 :: nballs
+    real(dp), intent(in)                :: qvel,offcenter,width,height
+    real(dp), dimension(:),intent(out)  :: x,y
+    real(dp), dimension(:),intent(out)  :: vx,vy
+
+    integer            :: i,j,k
+    integer            :: num_rows
+    real(dp)           :: xi,yi
+    real(dp)           :: center
+    real(dp)           :: sx ! 5.7 spacing in xi
+    real(dp)           :: sy  ! spacing in yi
+    real(dp),parameter :: PI = 4.D0*DATAN(1.D0)
+
+    ! set boundaries in for forces module
+    call set_boundaries(width, height)
+
+    ! spacing and center
+    sx = 2*RADIUS
+    sy = 2*RADIUS*sin(1._dp/3._dp*PI)
+    center = width*0.5_dp
 
     ! cue ball
     i=1
-    x(i) = 50.
+    x(i) = center + offcenter
     y(i) = 25.
     vx(i) = 0.
-    vy(i) = 100.
+    vy(i) = qvel
 
     ! setup triangle with others
     i = 2
-    do j=1,5
+    num_rows = calc_numrows(nballs)
+    do j=1,num_rows
         yi = 150.+(j-1)*sy
-        xi = 50.-(j-1)*sx/2.-sx
+        xi = center-(j-1)*sx*0.5_dp-sx
         do k=1,j
+            if (i > nballs) then
+                exit
+            endif
             xi = xi + sx
             x(i) = xi
             y(i) = yi
@@ -36,6 +70,6 @@ subroutine setupinitial(x,y,vx,vy)
         end do
     end do
 
-end subroutine setupinitial
+end subroutine initial_setup
 
 end module
