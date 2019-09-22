@@ -7,7 +7,8 @@ OBJS =  $(SRCS:.f90=.o)
 #Name des Compilers
 F90 = gfortran
 #FLAGS = -O0  -g -fimplicit-none  -Wall  -Wline-truncation  -Wcharacter-truncation  -Wsurprising  -Waliasing  -Wimplicit-interface  -Wunused-parameter  -fwhole-file  -fcheck=all  -std=f2008  -pedantic  -fbacktrace
-FLAGS = -O3 -fopenmp
+#FLAGS = -O0  -g -fopenmp -fimplicit-none  -Wall  -Wline-truncation  -Wcharacter-truncation  -Wsurprising  -Waliasing  -Wimplicit-interface  -Wunused-parameter  -fwhole-file  -fcheck=all  -std=f2008  -pedantic  -fbacktrace
+FLAGS = -O3 -fopenmp -fimplicit-none
 
 $(PROG): $(OBJS)
 	$(F90) $(FLAGS) -o $@ $(OBJS) $(LIBS) 
@@ -21,6 +22,6 @@ clean:
 
 globals.o: globals.f90
 forces.o: forces.f90 globals.o
-initial.o: initial.f90 globals.o
+initial.o: initial.f90 forces.o globals.o
 integration.o: integration.f90 globals.o
 main.o: main.f90 globals.o initial.o forces.o integration.o

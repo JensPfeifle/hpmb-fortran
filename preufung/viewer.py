@@ -36,6 +36,10 @@ def split_into_frames(filelines: list):
 
 
 def extract_frame_data(framelines: list):
+    """
+    takes raw frame data in the form of lines from the output file
+    and retuns a a frame object
+    """
     # first line is header
     f = framelines[0].split()
     framenum = int(f[1])
@@ -54,6 +58,16 @@ def extract_frame_data(framelines: list):
     return Frame(framenum, t, kinetic, balldatas)
 
 
+def anim_frames(framesr, frame_dt, anim_frame_interval):
+    """
+    takes an interable of frames and delta t betwen them
+    and returns a reduced # appropriate for animation
+    """
+    # interval: time between animation frames [ms]
+    step = int(anim_frame_interval/1000/frame_dt)
+    return itertools.islice(frames, 0, None, step)
+
+
 def init():
     """
     animation initialization function
@@ -69,20 +83,13 @@ def animate(framedata: Frame):
     animation update function
     """
     balls = framedata.balldata
-    for i,_ in enumerate(balls):
+    for i, _ in enumerate(balls):
         patch = ballpatches[i]
-        # x and y spapped for horizontal plot
+        # x and y swapped, for horizontal plot
         y = balls[i+1].xpos
         x = balls[i+1].ypos
         patch.center = (x, y)
     return ballpatches
-
-
-def anim_frames(frame_iterator, interval):
-    # interval: time between animation frames [ms]
-    frame_deltat = 0.00001  # [s]
-    step = int(interval/1000/frame_deltat)
-    return itertools.islice(frame_iterator, 0, None, step)
 
 
 if __name__ == "__main__":
@@ -95,19 +102,21 @@ if __name__ == "__main__":
     numballs = 0
     width_mm = 0
     height_mm = 0
+    dt = 1
     with open(inputfile, 'r') as f:
         lines = f.read().strip().split('\n')
-        lines = lines[1:-1] # drop first, last
+        lines = lines[1:-1]  # drop first and last
         for l in lines:
             # unsafe...
             exec(l.strip())
-    
+
     # read results from output data
     with open(outputfile, 'r') as f:
         lines = f.read().strip().split('\n')
     # process data
     frames = split_into_frames(lines)
-    animationframes = list(anim_frames(frames, ms_between_frames))
+    animationframes = list(anim_frames(frames, dt, ms_between_frames))
+    # only extract data from frames that will actually be animated
     framedata = [extract_frame_data(f) for f in animationframes]
 
     fnum = [f.framenum for f in framedata]
@@ -121,22 +130,21 @@ if __name__ == "__main__":
     ax2.plot(ftime, ekin, label='ekin')
     ax2.set_ylabel("total kinetic energy [J]")
     ax2.set_xlabel("simulation time [s]")
-    #ax2.legend()
+    # ax2.legend()
 
     # animation
     ax.set_ylim(0, width_mm)
     ax.set_xlim(0, height_mm)
-    ax.tick_params(axis='both',which='both',bottom=False, top=False, left=False, right =False,
-    labelbottom=False, labeltop=False, labelleft=False, labelright=False)
+    ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False,
+                   labelbottom=False, labeltop=False, labelleft=False, labelright=False)
     ax.set_aspect('equal')
     ax.set_facecolor('darkgreen')
 
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
-    #colors.remove('#7f7f7f')
     colorcycle = itertools.cycle(colors)
     for i in range(numballs):
-        if i == 1:
+        if i == 0:
             ballpatches.append(plt.Circle((-10, 0), 5.6/2, color='ivory'))
         else:
             ballpatches.append(plt.Circle((-10, 0), 5.6/2, color=next(colorcycle)))

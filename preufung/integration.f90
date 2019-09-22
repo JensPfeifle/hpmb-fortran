@@ -2,13 +2,21 @@ module integration
     use globals
     implicit none
 
-    real(dp), private, allocatable, dimension(:) :: fxold, fyold
+    public init_ver
+    public positions_ver
+    public velocities_ver
+    public positions_eul
+    public velocities_eul
 
+    real(dp), private, allocatable, dimension(:) :: fxold, fyold
+    
+    
 contains
 
+
 subroutine init_ver(nballs)
+    implicit none
     integer, intent(in) :: nballs
-    !real(dp), allocatable, dimension(:),intent(in) :: fxold, fyold
 
     allocate(fxold(nballs),fyold(nballs))
     fxold = 0_dp
@@ -86,8 +94,8 @@ subroutine velocities_ver(vx,vy,fx,fy,dt)
         fyold(i) = fy(i)
     end do
 
-
 end subroutine velocities_ver
+
 
 end module integration
 

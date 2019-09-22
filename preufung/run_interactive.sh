@@ -1,5 +1,6 @@
 #!/bin/bash
-read -p "How many threads?" threads
+echo "Note: one thread is fastest due to overhead..."
+read -p "How many threads?  " threads
 export OMP_NUM_THREADS=$threads
 echo "Starting ./main with $threads threads..."
 time (./main > pool.out)
