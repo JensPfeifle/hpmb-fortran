@@ -5,4 +5,5 @@
  t_total = 10.
  dt = 0.00001
  qball_vel = 150.
+ integration_scheme = 2
 /

@@ -1,7 +1,7 @@
 #Programmname
 PROG =  main
 #Liste der Quelldateien
-SRCS =  main.f90 globals.f90 initial.f90 forces.f90
+SRCS =  main.f90 globals.f90 initial.f90 forces.f90 integration.f90
 #Liste der Objektdateien
 OBJS =  $(SRCS:.f90=.o)   
 #Name des Compilers
@@ -20,4 +20,5 @@ clean:
 globals.o: globals.f90
 forces.o: forces.f90 globals.o
 initial.o: initial.f90 globals.o
-main.o: main.f90 globals.o initial.o forces.o
+integration.o: integration.f90 globals.o
+main.o: main.f90 globals.o initial.o forces.o integration.o
