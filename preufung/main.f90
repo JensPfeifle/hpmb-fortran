@@ -7,14 +7,14 @@ program main
 
     real(dp), allocatable, dimension(:) :: x,y,vx,vy,fx,fy
     real(dp)                            :: t, dt, t_total
-    real(dp)                            :: width_mm, height_mm, qball_vel
+    real(dp)                            :: width_mm, height_mm, qball_vel,qball_offcenter
     integer                             :: i, frame
     real(dp)                            :: ekin
     integer                             :: numballs, integration_scheme
 
     namelist /INPUT/ numballs,width_mm,height_mm,   &
                      t_total,dt,integration_scheme, &
-                     qball_vel
+                     qball_vel, qball_offcenter
                      
     open( UNIT=10, file='input.dat' )
     read( UNIT=10, NML=INPUT )
@@ -30,10 +30,8 @@ program main
     ! initial conditions
     frame = 0
     t = 0
-    call set_boundaries(width_mm, height_mm)
-    call set_queue_vel(qball_vel)
-    call set_nballs(numballs)
-    call initial_setup(x,y,vx,vy)
+    call initial_setup(numballs, qball_vel, qball_offcenter, &
+                       width_mm, height_mm, x, y, vx, vy )
 
     select case(integration_scheme)
     case(1) ! euler
@@ -51,7 +49,7 @@ program main
         call init_ver(numballs)                          ! f_old initialisieren
         do while (t < t_total)
             call write_(frame,t,ekin,x,y,vx,vy)          ! ausgabe
-            call force(x,y,vx,vy,fx,fy)         ! bestimme kraefte
+            call force(x,y,vx,vy,fx,fy)                  ! bestimme kraefte
             call positions_ver(x,y,vx,vy,fx,fy,dt)       ! bewege atome
             call velocities_ver(vx,vy,fx,fy,dt)          ! aktualisiere geschwindigkeiten
             ekin = ekin_(vx,vy)                          ! berechne kinetische energie
@@ -63,9 +61,12 @@ program main
 
     deallocate(x, y, vx, vy, fx, fy)
 
+
 contains
 
+
 function ekin_(vx,vy) result(e)
+    ! calculate kinetic energy of all balls
     real(dp), dimension(:), intent(in)  :: vx,vy
     real(dp)                            :: e
     e = 0.
@@ -75,6 +76,8 @@ function ekin_(vx,vy) result(e)
 end function ekin_
 
 subroutine write_(f,t,ekin,x,y,vx,vy)
+    implicit none
+    ! write output frame
     integer, intent(in)                 :: f
     real(dp), intent(in)                :: t,ekin
     real(dp), dimension(:), intent(in)  :: x,y
@@ -89,8 +92,8 @@ subroutine write_(f,t,ekin,x,y,vx,vy)
     end do
     write(*,*) "ENDF"
 
-
-    end subroutine write_
+end subroutine write_
         
+
 end program main
 

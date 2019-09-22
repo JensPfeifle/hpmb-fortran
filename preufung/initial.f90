@@ -1,25 +1,12 @@
 module initial
     use globals
+    use forces
     implicit none
 
     private :: calc_numrows
-    public :: set_nballs, initial_setup
-    integer, private :: num_balls
-    integer, private :: num_rows
-    real(dp), private :: queue_ball_vel = 100.
+    public :: initial_setup
 
 contains
-
-subroutine set_nballs(nballs)
-    integer, intent(in) :: nballs
-    num_balls = nballs 
-    num_rows = calc_numrows(nballs)
-end subroutine set_nballs
-
-subroutine set_queue_vel(qvel)
-    real(dp), intent(in) :: qvel
-    queue_ball_vel = qvel 
-end subroutine set_queue_vel
 
 function calc_numrows(nballs) result(nrows)
     ! aus anzahl kugeln die anzahl reihen bestimmen
@@ -34,30 +21,44 @@ function calc_numrows(nballs) result(nrows)
     end do
 end function calc_numrows
 
-subroutine initial_setup(x,y,vx,vy)
-    real(dp), dimension(num_balls),intent(out)  :: x,y
-    real(dp), dimension(num_balls),intent(out)  :: vx,vy
+subroutine initial_setup(nballs, qvel, offcenter, width, height, x,y,vx,vy)
+    implicit none
+    integer, intent(in)                 :: nballs
+    real(dp), intent(in)                :: qvel,offcenter,width,height
+    real(dp), dimension(:),intent(out)  :: x,y
+    real(dp), dimension(:),intent(out)  :: vx,vy
 
-    integer :: i
-    integer :: j,k
-    real(dp)    :: xi,yi
-    real(dp),parameter    :: sx = 5.7 ! spacing in xi
-    real(dp),parameter    :: sy = 4.9363448 ! spacing in yi
+    integer            :: i,j,k
+    integer            :: num_rows
+    real(dp)           :: xi,yi
+    real(dp)           :: center
+    real(dp)           :: sx ! 5.7 spacing in xi
+    real(dp)           :: sy  ! spacing in yi
+    real(dp),parameter :: PI = 4.D0*DATAN(1.D0)
+
+    ! set boundaries in for forces module
+    call set_boundaries(width, height)
+
+    ! spacing and center
+    sx = 2*RADIUS
+    sy = 2*RADIUS*sin(1._dp/3._dp*PI)
+    center = width*0.5_dp
 
     ! cue ball
     i=1
-    x(i) = 50.
+    x(i) = center + offcenter
     y(i) = 25.
     vx(i) = 0.
-    vy(i) = queue_ball_vel
+    vy(i) = qvel
 
     ! setup triangle with others
     i = 2
+    num_rows = calc_numrows(nballs)
     do j=1,num_rows
         yi = 150.+(j-1)*sy
-        xi = 50.-(j-1)*sx*0.5_dp-sx
+        xi = center-(j-1)*sx*0.5_dp-sx
         do k=1,j
-            if (i > num_balls) then
+            if (i > nballs) then
                 exit
             endif
             xi = xi + sx
