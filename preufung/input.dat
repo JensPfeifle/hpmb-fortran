@@ -1,8 +1,8 @@
 &INPUT
- numballs = 11
+ numballs = 22
  height_mm = 223.52
  width_mm = 111.76
- t_total = 10.
+ t_total = 2.
  dt = 0.00001
  qball_vel = 150.
  integration_scheme = 2
