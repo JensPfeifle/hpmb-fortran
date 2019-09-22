@@ -6,9 +6,11 @@ SRCS =  main.f90 globals.f90 initial.f90 forces.f90 integration.f90
 OBJS =  $(SRCS:.f90=.o)   
 #Name des Compilers
 F90 = gfortran
+#FLAGS = -O0  -g -fimplicit-none  -Wall  -Wline-truncation  -Wcharacter-truncation  -Wsurprising  -Waliasing  -Wimplicit-interface  -Wunused-parameter  -fwhole-file  -fcheck=all  -std=f2008  -pedantic  -fbacktrace
+FLAGS = -O3 -fopenmp
 
 $(PROG): $(OBJS)
-	$(F90) -o $@ $(OBJS) $(LIBS) 
+	$(F90) $(FLAGS) -o $@ $(OBJS) $(LIBS) 
 clean:
 	rm -f $(PROG) *.mod *.o
 
