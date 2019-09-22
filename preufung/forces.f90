@@ -1,14 +1,17 @@
 module forces
     use globals
+    use omp_lib
     implicit none
 
-    private :: interactions,boundaries,friction
+    private :: interact,boundaries,friction,naive_interactions,cll_interactions
     public :: force
 
     real(dp), private :: boundary_width
     real(dp), private :: boundary_height
 
+
 contains
+
 
 subroutine set_boundaries(width, height)
     real(dp), intent(in) :: width, height
@@ -16,178 +19,226 @@ subroutine set_boundaries(width, height)
     boundary_height = height
 end subroutine set_boundaries
 
-subroutine force(x,y,vx,vy,fx,fy, numballs)
+
+subroutine force(x,y,vx,vy,fx,fy)
     implicit none
-    integer                  ,intent(in)  :: numballs
-    real(dp), dimension(numballs),intent(in)  :: x,y
-    real(dp), dimension(numballs),intent(in)  :: vx,vy
-    real(dp), dimension(numballs),intent(out) :: fx,fy
+    real(dp), dimension(:),intent(in)  :: x,y
+    real(dp), dimension(:),intent(in)  :: vx,vy
+    real(dp), dimension(:),intent(out) :: fx,fy
 
-    integer :: i
+    fx = 0_dp
+    fy = 0_dp
 
-    do i=1,numballs
-        fx(i) = 0_dp
-        fy(i) = 0_dp
-    end do
-
-    call interactions(x,y,fx,fy,numballs)
-    call boundaries(x,y,fx,fy,numballs)
-    call friction(vx,vy,fx,fy,numballs)
+    call cll_interactions(x,y,fx,fy)
+    !call naive_interactions(x,y,fx,fy)
+    call boundaries(x,y,fx,fy)
+    call friction(vx,vy,fx,fy)
 
 end subroutine force
+
 
 function dudr_ball2ball(r2) result(du)
     ! ableitung des Potentials zw. Kugeln
     real(dp), intent(in) :: r2
-    real(dp) :: du
+    real(dp) :: du,diam2
 
-    ! 32.49 = kugeldurchmesser**2
-    if (r2 > 32.49) then 
+    diam2 = (r*2)**2 ! kugeldurchmesser**2
+    if (r2 > diam2) then
         du = 0_dp
     else
-        du =  (r2-32.49)**2
+        du =  (r2-diam2)**2
     end if
 end function dudr_ball2ball
+
 
 function dudr_table_edge(r2) result(du)
     ! ableitung des Potentials zw. Kugel und Bande
     real(dp), intent(in) :: r2
-    real(dp) :: du
+    real(dp) :: du,diam2
 
-    if (r2 > 32.49) then 
+    diam2 = (r*2)**2 ! kugeldurchmesser**2
+    if (r2 > diam2) then
         du = 0_dp
     else
-        du =  (r2-32.49)**2
+        du =  (r2-diam2)**2
     end if
 end function dudr_table_edge
 
-subroutine interactions(x,y,fx,fy,numballs)
-    implicit none
-    integer                  ,intent(in)  :: numballs
-    real(dp), dimension(numballs),intent(in)  :: x,y
-    real(dp), dimension(numballs),intent(out) :: fx,fy
 
-    integer                               :: i,j
+subroutine interact(x,y,fx,fy,i,j)
+    ! calculate interaction between ball i and ball j
+    implicit none
+    integer                  ,intent(in)  :: i,j
+    real(dp), dimension(:),intent(in)  :: x,y
+    real(dp), dimension(:),intent(out) :: fx,fy
+
     real(dp) :: dx, dy, r2, fr, fxi, fyi
 
-    call celllinkedlist(x,y)
-  
+    ! ball-to-ball forces
+    dx = x(i) - x(j)
+    dy = y(i) - y(j)
+    r2 = dx*dx + dy*dy
+    ! anteilige kraft
+    fr = dudr_ball2ball(r2)
+    fxi = fr * dx
+    fyi = fr * dy
+    ! gesamtkraefte
+    fx(i) = fx(i) + fxi ! actio
+    fx(j) = fx(j) - fxi ! reactio
+    fy(i) = fy(i) + fyi ! actio
+    fy(j) = fy(j) - fyi ! reactio
+
+end subroutine interact
+
+
+subroutine naive_interactions(x,y,fx,fy)
+    implicit none
+    real(dp), dimension(:),intent(in)       :: x,y
+    real(dp), dimension(:),intent(inout)    :: fx,fy
+
+    integer                                 :: i,j,numballs
+
+    numballs = size(x)
     ! ball-to-ball forces
     do i=1,numballs-1
         do j=i+1,numballs
-            dx = x(i) - x(j)
-            dy = y(i) - y(j)
-            r2 = dx*dx + dy*dy
-            ! anteilige kraft
-            fr = dudr_ball2ball(r2)
-            fxi = fr * dx
-            fyi = fr * dy
-            ! gesamtkraefte
-            fx(i) = fx(i) + fxi ! actio
-            fx(j) = fx(j) - fxi ! reactio
-            fy(i) = fy(i) + fyi ! actio
-            fy(j) = fy(j) - fyi ! reactio
+            call interact(x,y,fx,fy,i,j)
         end do
     end do
 
-end subroutine interactions
 
-subroutine celllinkedlist(x,y)
-    real(dp), dimension(:),intent(in) :: x,y
+end subroutine naive_interactions
 
-    integer :: ncellsx, ncellsy, ncells
-    real(dp) :: dx,dy
-    integer :: n,numballs
-    real(dp) :: r = 4*2.85 ! cutoff radius, r_ball=2.85
-    integer :: i,j,celln
-    integer, allocatable, dimension(:,:) :: first 
-    integer, allocatable, dimension(:) :: next,last
 
-    
+subroutine cll_interactions(x,y, fx,fy)
+    real(dp), dimension(:),intent(in)    :: x,y
+    real(dp), dimension(:),intent(inout)    :: fx,fy
+
+    integer                              :: ncellsx, ncellsy, ncells
+    real(dp)                             :: dx,dy
+    integer                              :: n,m,numballs
+    integer                              :: i,j,l,k,lmin,lmax,kmin,kmax
+    integer, allocatable, dimension(:,:) :: first
+    integer, allocatable, dimension(:)   :: next
+    integer, allocatable, dimension(:,:) :: last
+
     numballs = size(x)
     ! determine number and size of cells
-    ncellsx = max(floor(boundary_width/r), 1)
-    ncellsy = max(floor(boundary_height/r), 1)
+    ncellsx = max(floor(boundary_width/rcut), 1)
+    ncellsy = max(floor(boundary_height/rcut), 1)
     ncells = ncellsx*ncellsy
-    write(*,*) "num cells", ncells, "x", ncellsx, "y", ncellsy
-    allocate(first(ncellsx,ncellsy),next(numballs),last(numballs))
+    !write(*,*) "num cells", ncells, "x", ncellsx, "y", ncellsy
+    allocate(first(ncellsx,ncellsy), &
+             next(numballs),         &
+             last(ncellsx,ncellsy))
     first = -1
     next = -1
     dx = boundary_width / real(ncellsx, dp)
     dy = boundary_height/ real(ncellsy, dp)
-    write(*,*) "cell size", "x", dx, "y", dy
+    !write(*,*) "cell size", dx, dy
 
     ! fill lists
     do n=1,numballs
-        write(*,*) "ball", n
-
         ! determine cell number
-        i = floor(x(n)/dx)
-        j = int(floor(y(n)/dy))
-        write(*,*) "i", i, "j", j
-
-        celln = j*ncellsy + i
+        i = floor(x(n)/dx)+1
+        j = floor(y(n)/dy)+1
         if (first(i,j) == -1) then
-            write(*,*) n, " ist first in cell",i,j
             first(i,j) = n
         else
-
-            write(*,*) n, " is next in cell",i,j
-            next(first(i,j)) = n  
+            next(last(i,j)) = n
         end if
+        last(i,j) = n
     end do
-    write(*,*) "first"
-    100 format(39(i3))
-    do n=ncellsy,1,-1
-        write(*,100) first(:,n)
+    
+    ! set to true for verbose cell list output
+    if (.false.) then
+        write(*,*) "first"
+        100 format(39(i3))
+        do j=ncellsy,1,-1
+                write(*,100) first(:,j)
+        end do
+        write(*,*) "next"
+        write(*,100)  next
+        write(*,*) "last"
+        do j=ncellsy,1,-1
+                write(*,100) last(:,j)
+        end do
+    end if
+
+    deallocate(last) ! dont need this anymore
+
+    call omp_set_nested(.false.)
+    !$omp parallel do default(shared) private(i,l,k,n,m,kmin,kmax,lmin,lmax)
+    do j=1,ncellsy
+        !write(*,'(a,3(i4))') "thread", omp_get_thread_num(), j
+        do i=1,ncellsx
+            kmin = max(i-1,1)
+            kmax = min(i+1,ncellsx)
+            lmin = max(j-1,1)
+            lmax = min(j+1,ncellsy)
+            do l=lmin,lmax
+                do k=kmin,kmax
+                    ! ball n in this cell
+                    n = first(i,j)
+                    do while (n .NE. -1)
+                     ! ball m in other cell
+                        m = first(k,l)
+                        do while (m .NE. -1)
+                            if (n < m) then ! no double counting of pair (n, m)
+                                call interact(x,y,fx,fy,n,m)
+                            end if
+                        m = next(m)
+                        end do
+                    n = next(n)
+                    end do
+                end do
+            end do
+        end do
     end do
-    write(*,*) "next"
-    write(*,100)  next
+    !$omp end parallel do
+
+end subroutine cll_interactions
 
 
-
-end subroutine celllinkedlist
-
-subroutine boundaries(x,y,fx,fy, numballs)
+subroutine boundaries(x,y,fx,fy)
     implicit none
-    integer                  ,intent(in)  :: numballs
-    real(dp), dimension(numballs),intent(in)  :: x,y
-    real(dp), dimension(numballs),intent(out) :: fx,fy
+    real(dp), dimension(:),intent(in)  :: x,y
+    real(dp), dimension(:),intent(inout) :: fx,fy
 
-    integer                                   :: i
+    integer                                   :: i,numballs
     real(dp)                                  :: dx, dy, r2, fr, fxi, fyi
 
-    ! fixme make function of radius not boundary size
+    numballs = size(x)
     do i=1,numballs
         ! left
-        if (x(i) < 0.1_dp*boundary_width) then
+        if (x(i) < rcut) then
             dx = x(i)
             r2 = dx*dx
             fr = dudr_table_edge(r2)
             fxi = fr * dx
         ! right
-        else if (x(i) > 0.9_dp*boundary_width) then
+        else if (x(i) > boundary_width-rcut) then
             dx = x(i) - boundary_width
             r2 = dx*dx
             fr = dudr_table_edge(r2)
             fxi = fr * dx
-        else 
+        else
             fxi = 0_dp
         end if
 
         ! bottom
-        if (y(i) < 0.1_dp*boundary_height) then
+        if (y(i) < rcut) then
             dy = y(i)
             r2 = dy*dy
             fr = dudr_table_edge(r2)
             fyi = fr * dy
         ! top
-        else if (y(i) > 0.9_dp*boundary_height) then
+        else if (y(i) > boundary_height-rcut) then
             dy = y(i) - boundary_height
             r2 = dy*dy
             fr = dudr_table_edge(r2)
             fyi = fr * dy
-        else 
+        else
             fyi = 0_dp
         end if
 
@@ -198,28 +249,28 @@ subroutine boundaries(x,y,fx,fy, numballs)
 
 end subroutine boundaries
 
-subroutine friction(vx,vy,fx,fy,numballs)
-    implicit none
-    integer                  ,intent(in)  :: numballs
-    real(dp), dimension(numballs),intent(in)  :: vx,vy
-    real(dp), dimension(numballs),intent(out) :: fx,fy
 
-    integer :: i
+subroutine friction(vx,vy,fx,fy)
+    implicit none
+    real(dp), dimension(:),intent(in)  :: vx,vy
+    real(dp), dimension(:),intent(inout) :: fx,fy
+
+    integer :: i,numballs
     real(dp),parameter :: v0 = 0.001 ! velocity to consider zero for friction
     real(dp) :: fxi, fyi
 
-
+    numballs = size(vx)
     do i=1,numballs
         if (vx(i) > v0) then
-            fxi = -mu*m*g        
+            fxi = -mu*m*g
         else if (vx(i) < -v0) then
             fxi = mu*m*g
         else
-            fxi = 0     
+            fxi = 0
         end if
 
         if (vy(i) > v0) then
-            fyi = -mu*m*g        
+            fyi = -mu*m*g
         else if (vy(i) < -v0) then
             fyi = mu*m*g
         else
