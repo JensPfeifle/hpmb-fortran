@@ -69,6 +69,8 @@ subroutine interactions(x,y,fx,fy,numballs)
 
     integer                               :: i,j
     real(dp) :: dx, dy, r2, fr, fxi, fyi
+
+    call celllinkedlist(x,y)
   
     ! ball-to-ball forces
     do i=1,numballs-1
@@ -90,15 +92,72 @@ subroutine interactions(x,y,fx,fy,numballs)
 
 end subroutine interactions
 
+subroutine celllinkedlist(x,y)
+    real(dp), dimension(:),intent(in) :: x,y
+
+    integer :: ncellsx, ncellsy, ncells
+    real(dp) :: dx,dy
+    integer :: n,numballs
+    real(dp) :: r = 4*2.85 ! cutoff radius, r_ball=2.85
+    integer :: i,j,celln
+    integer, allocatable, dimension(:,:) :: first 
+    integer, allocatable, dimension(:) :: next,last
+
+    
+    numballs = size(x)
+    ! determine number and size of cells
+    ncellsx = max(floor(boundary_width/r), 1)
+    ncellsy = max(floor(boundary_height/r), 1)
+    ncells = ncellsx*ncellsy
+    write(*,*) "num cells", ncells, "x", ncellsx, "y", ncellsy
+    allocate(first(ncellsx,ncellsy),next(numballs),last(numballs))
+    first = -1
+    next = -1
+    dx = boundary_width / real(ncellsx, dp)
+    dy = boundary_height/ real(ncellsy, dp)
+    write(*,*) "cell size", "x", dx, "y", dy
+
+    ! fill lists
+    do n=1,numballs
+        write(*,*) "ball", n
+
+        ! determine cell number
+        i = floor(x(n)/dx)
+        j = int(floor(y(n)/dy))
+        write(*,*) "i", i, "j", j
+
+        celln = j*ncellsy + i
+        if (first(i,j) == -1) then
+            write(*,*) n, " ist first in cell",i,j
+            first(i,j) = n
+        else
+
+            write(*,*) n, " is next in cell",i,j
+            next(first(i,j)) = n  
+        end if
+    end do
+    write(*,*) "first"
+    100 format(39(i3))
+    do n=ncellsy,1,-1
+        write(*,100) first(:,n)
+    end do
+    write(*,*) "next"
+    write(*,100)  next
+
+
+
+end subroutine celllinkedlist
+
 subroutine boundaries(x,y,fx,fy, numballs)
     implicit none
     integer                  ,intent(in)  :: numballs
     real(dp), dimension(numballs),intent(in)  :: x,y
     real(dp), dimension(numballs),intent(out) :: fx,fy
 
-    integer                               :: i
+    integer                                   :: i
     real(dp)                                  :: dx, dy, r2, fr, fxi, fyi
 
+    ! fixme make function of radius not boundary size
     do i=1,numballs
         ! left
         if (x(i) < 0.1_dp*boundary_width) then
