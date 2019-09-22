@@ -55,7 +55,7 @@ subroutine initial_setup(x,y,vx,vy)
     i = 2
     do j=1,num_rows
         yi = 150.+(j-1)*sy
-        xi = 50.-(j-1)*sx/2_dp-sx
+        xi = 50.-(j-1)*sx*0.5_dp-sx
         do k=1,j
             if (i > num_balls) then
                 exit
