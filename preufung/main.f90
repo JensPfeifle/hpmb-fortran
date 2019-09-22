@@ -9,7 +9,7 @@ program main
     real(dp)                            :: t, dt, t_total
     real(dp)                            :: width_mm, height_mm, qball_vel
     integer                             :: i, frame
-    real(dp)                            :: vtotal2, ekin
+    real(dp)                            :: ekin
     integer                             :: numballs, integration_scheme
 
     namelist /INPUT/ numballs,width_mm,height_mm,   &
@@ -39,7 +39,7 @@ program main
     case(1) ! euler
         do while (t < t_total)
             call write_(frame,t,ekin,x,y,vx,vy)          ! ausgabe
-            call force(x,y,vx,vy,fx,fy,numballs)         ! bestimme kraefte
+            call force(x,y,vx,vy,fx,fy)                  ! bestimme kraefte
             call positions_eul(x,y,vx,vy,dt)             ! bewege atome
             call velocities_eul(vx,vy,fx,fy,dt)          ! aktualisiere geschwindigkeiten
             ekin = ekin_(vx,vy)                          ! berechne kinetische energie
@@ -51,7 +51,7 @@ program main
         call init_ver(numballs)                          ! f_old initialisieren
         do while (t < t_total)
             call write_(frame,t,ekin,x,y,vx,vy)          ! ausgabe
-            call force(x,y,vx,vy,fx,fy,numballs)         ! bestimme kraefte
+            call force(x,y,vx,vy,fx,fy)         ! bestimme kraefte
             call positions_ver(x,y,vx,vy,fx,fy,dt)       ! bewege atome
             call velocities_ver(vx,vy,fx,fy,dt)          ! aktualisiere geschwindigkeiten
             ekin = ekin_(vx,vy)                          ! berechne kinetische energie
@@ -61,6 +61,8 @@ program main
         end do
     end select
 
+    deallocate(x, y, vx, vy, fx, fy)
+
 contains
 
 function ekin_(vx,vy) result(e)
@@ -68,7 +70,7 @@ function ekin_(vx,vy) result(e)
     real(dp)                            :: e
     e = 0.
     do i=1,size(vx)
-        e = e + 0.5_dp*m*( vx(i)**2 + vy(i)**2 )
+        e = e + 0.5_dp*m*( vx(i)**2 + vy(i)**2 )/1000_dp
     end do
 end function ekin_
 
