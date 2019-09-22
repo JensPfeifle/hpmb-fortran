@@ -71,8 +71,9 @@ def animate(framedata: Frame):
     balls = framedata.balldata
     for i,_ in enumerate(balls):
         patch = ballpatches[i]
-        x = balls[i+1].xpos
-        y = balls[i+1].ypos
+        # x and y spapped for horizontal plot
+        y = balls[i+1].xpos
+        x = balls[i+1].ypos
         patch.center = (x, y)
     return ballpatches
 
@@ -118,16 +119,27 @@ if __name__ == "__main__":
 
     # energy plot
     ax2.plot(ftime, ekin, label='ekin')
-    ax2.legend()
+    ax2.set_ylabel("total kinetic energy [J]")
+    ax2.set_xlabel("simulation time [s]")
+    #ax2.legend()
 
     # animation
-    ax.set_xlim(0, width_mm)
-    ax.set_ylim(0, height_mm)
-    ax.set_yticklabels([])
-    ax.set_xticklabels([])
+    ax.set_ylim(0, width_mm)
+    ax.set_xlim(0, height_mm)
+    ax.tick_params(axis='both',which='both',bottom=False, top=False, left=False, right =False,
+    labelbottom=False, labeltop=False, labelleft=False, labelright=False)
     ax.set_aspect('equal')
+    ax.set_facecolor('darkgreen')
+
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+    #colors.remove('#7f7f7f')
+    colorcycle = itertools.cycle(colors)
     for i in range(numballs):
-        ballpatches.append(plt.Circle((-10, 0), 5.7/2))
+        if i == 1:
+            ballpatches.append(plt.Circle((-10, 0), 5.6/2, color='ivory'))
+        else:
+            ballpatches.append(plt.Circle((-10, 0), 5.6/2, color=next(colorcycle)))
     anim = animation.FuncAnimation(fig, animate,
                                    init_func=init,
                                    frames=framedata,
