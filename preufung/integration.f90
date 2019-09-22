@@ -2,7 +2,7 @@ module integration
     use globals
     implicit none
 
-    real(dp), allocatable, dimension(:) :: fxold, fyold
+    real(dp), private, allocatable, dimension(:) :: fxold, fyold
 
 contains
 
