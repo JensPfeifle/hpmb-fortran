@@ -1,0 +1,8 @@
+&INPUT
+ numballs = 11
+ height_mm = 223.52
+ width_mm = 111.76
+ t_total = 10.
+ dt = 0.00001
+ qball_vel = 150.
+/

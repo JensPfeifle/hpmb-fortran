@@ -3,9 +3,11 @@ from matplotlib import pyplot as plt
 from matplotlib import animation
 from collections import namedtuple
 import itertools
+import json
 
 Balldata = namedtuple('Balldata', ['xpos', 'ypos', 'xvel', 'yvel'])
-ballpatches = []  # holds cirlce patches for animation
+Frame = namedtuple('Frame', ['framenum', 'time', 'kinetic', 'balldata'])
+ballpatches = []  # holds circle patches for animation
 
 
 def chunks(l, n):
@@ -17,7 +19,7 @@ def chunks(l, n):
 def split_into_frames(filelines: list):
     """
     splits a list of lines into a list of frames
-    note: assumes frames are all same # of lines
+    assumes frames are all same # of lines
     frames begin with 'FRAME #'
     frames end with 'ENDF'
     """
@@ -42,14 +44,14 @@ def extract_frame_data(framelines: list):
     t = float(f[0])
     kinetic = float(f[1])
     # remaining lines except last are balls
-    ballvalues = {}
+    balldatas = {}
     for i in range(2, len(framelines)-1):
         f = framelines[i].split()
         ballnum = int(f[0])
         xpos, ypos, xvel, yvel = [float(s) for s in f[1:]]
-        ballvalues[ballnum] = Balldata(xpos, ypos, xvel, yvel)
+        balldatas[ballnum] = Balldata(xpos, ypos, xvel, yvel)
     # make observables a namedtuple?
-    return (framenum, t, kinetic, ballvalues)
+    return Frame(framenum, t, kinetic, balldatas)
 
 
 def init():
@@ -62,21 +64,21 @@ def init():
     return ballpatches
 
 
-def animate(framedata):
+def animate(framedata: Frame):
     """
     animation update function
     """
-    framenum, t, kinetic, balldata = framedata
-    for i in range(len(balldata)):
+    balls = framedata.balldata
+    for i,_ in enumerate(balls):
         patch = ballpatches[i]
-        x = balldata[i+1].xpos
-        y = balldata[i+1].ypos
+        x = balls[i+1].xpos
+        y = balls[i+1].ypos
         patch.center = (x, y)
-    return ballpatches  # only return updated?
+    return ballpatches
 
 
 def anim_frames(frame_iterator, interval):
-    # interval between animation frames [ms]
+    # interval: time between animation frames [ms]
     frame_deltat = 0.00001  # [s]
     step = int(interval/1000/frame_deltat)
     return itertools.islice(frame_iterator, 0, None, step)
@@ -84,43 +86,52 @@ def anim_frames(frame_iterator, interval):
 
 if __name__ == "__main__":
 
-    filename = './pool.out'
+    ms_between_frames = 20
+    inputfile = './input.dat'
+    outputfile = './pool.out'
 
-    # read data
-    with open(filename, 'r') as f:
+    # read variables from input data
+    numballs = 0
+    width_mm = 0
+    height_mm = 0
+    with open(inputfile, 'r') as f:
+        lines = f.read().strip().split('\n')
+        lines = lines[1:-1] # drop first, last
+        for l in lines:
+            # unsafe...
+            exec(l.strip())
+    
+    # read results from output data
+    with open(outputfile, 'r') as f:
         lines = f.read().strip().split('\n')
     # process data
     frames = split_into_frames(lines)
+    animationframes = list(anim_frames(frames, ms_between_frames))
+    framedata = [extract_frame_data(f) for f in animationframes]
+
+    fnum = [f.framenum for f in framedata]
+    ftime = [f.time for f in framedata]
+    ekin = [f.kinetic for f in framedata]
 
     # setup canvas
     fig, (ax, ax2) = plt.subplots(2, 1)
-    #fig, ax = plt.subplots()
 
-    animationframes = list(anim_frames(frames, 16))
-
-    framedata = [extract_frame_data(f) for f in animationframes[1:]]
-
-    fnum = [f[0] for f in framedata]
-    ftime = [f[1] for f in framedata]
-    ekin = [f[2] for f in framedata]
-
-    # ax2.set_xlim(left=0)
-    # ax2.set_ylim(bottom=0)
+    # energy plot
     ax2.plot(ftime, ekin, label='ekin')
     ax2.legend()
 
-    ax.set_xlim(0, 111.76)
-    ax.set_ylim(0, 223.52)
+    # animation
+    ax.set_xlim(0, width_mm)
+    ax.set_ylim(0, height_mm)
     ax.set_yticklabels([])
     ax.set_xticklabels([])
     ax.set_aspect('equal')
-    # ballpatches is global variable
-    for i in range(16):  # hardcoded max number of balls!
+    for i in range(numballs):
         ballpatches.append(plt.Circle((-10, 0), 5.7/2))
     anim = animation.FuncAnimation(fig, animate,
                                    init_func=init,
                                    frames=framedata,
-                                   interval=16,
+                                   interval=ms_between_frames,
                                    repeat=True,
                                    blit=True)
 

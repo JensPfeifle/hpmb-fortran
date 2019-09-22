@@ -1,22 +1,40 @@
 program main
+    use globals
     use initial
     use forces
-    use globals
     implicit none
 
-    real, dimension(numballs) :: x,y,vx,vy,ax,ay,fx,fy
-    real                :: t
-    integer             :: i, frame
-    real                :: vtotal2, ekin
+    real(dp), allocatable, dimension(:) :: x,y,vx,vy,ax,ay,fx,fy
+    real(dp)                            :: t, dt, t_total
+    real(dp)                            :: width_mm, height_mm, qball_vel
+    integer                             :: i, frame
+    real(dp)                            :: vtotal2, ekin
+    integer                             :: numballs
 
-    !fixme interfaces!
+    namelist /INPUT/ numballs,width_mm,height_mm,t_total,dt,qball_vel
+    
+    open( UNIT=10, file='input.dat' )
+    read( UNIT=10, NML=INPUT )
+    close(10)
+
+    allocate(x(numballs), &
+             y(numballs), &
+             vx(numballs), &
+             vy(numballs), &
+             ax(numballs), &
+             ay(numballs), &
+             fx(numballs), &
+             fy(numballs)  )
 
     ! initial conditions
     frame = 0
     t = 0
-    call setupinitial(x,y,vx,vy)
+    call set_boundaries(width_mm, height_mm)
+    call set_queue_vel(qball_vel)
+    call set_nballs(numballs)
+    call initial_setup(x,y,vx,vy)
 
-    do while (t < 10.)
+    do while (t < t_total)
         ! ausgabe
         write(*,*) "FRAME", frame
         write(*,*) t, ekin
@@ -33,21 +51,20 @@ program main
         end do
         ! bewege atome
         do i=1,numballs
-            x(i) = x(i) + vx(i)*dt + ax(i)*dt*dt/2.
-            y(i) = y(i) + vy(i)*dt + ay(i)*dt*dt/2.
+            x(i) = x(i) + vx(i)*dt + ax(i)*dt*dt/2_dp
+            y(i) = y(i) + vy(i)*dt + ay(i)*dt*dt/2_dp
         end do
         ! aktualisiere geschwindigkeiten
         do i=1,numballs
-            vx(i) = vx(i) + ax(i)*dt/2.
-            vy(i) = vy(i) + ay(i)*dt/2.
+            vx(i) = vx(i) + ax(i)*dt/2_dp
+            vy(i) = vy(i) + ay(i)*dt/2_dp
         end do
         ! berechne kinetische energie
         ekin = 0.
         do i=1,numballs
             vtotal2 = vx(i)**2 + vy(i)**2
-            ekin = ekin + 0.5*vtotal2
+            ekin = ekin + 0.5_dp*m*vtotal2
         end do
-        
         ! zeitschritt
         frame = frame + 1
         t = t + dt
